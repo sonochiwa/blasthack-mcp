@@ -102,7 +102,7 @@ Releases are built by GitHub Actions from the tagged commit and carry a
 SHA-256 file and a build-provenance attestation:
 
 ```powershell
-gh attestation verify blasthack-mcp-v1.0.0.zip -R sonochiwa/blasthack-mcp
+gh attestation verify blasthack-mcp-v1.1.0.zip -R sonochiwa/blasthack-mcp
 ```
 
 ## License
