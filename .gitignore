@@ -5,8 +5,7 @@
 .claude/
 .codex/
 
-__pycache__/
-*.pyc
-.env
+build/
+references/
+
 blasthack-moderation-log.txt
-tests/_*.html

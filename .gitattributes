@@ -1,1 +1,7 @@
 * text=auto eol=lf
+
+.github/release/README.txt text eol=crlf
+
+*.png binary
+*.exe binary
+*.zip binary

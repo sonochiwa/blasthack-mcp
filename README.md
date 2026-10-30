@@ -1,122 +1,88 @@
-# blasthack-mcp
+# BlastHack MCP
 
-MCP-сервер для модераторов [blast.hk](https://www.blast.hk) (XenForo 2). С ним Claude умеет:
-- читать разделы, темы и посты, искать по форуму;
-- разбирать очередь на одобрение (`/approval-queue/`);
-- проверять вложения на стиллеры и вирусы, не запуская их;
-- сверять релизы с правилами форума;
-- одобрять, отклонять, править и переносить темы, каждый раз с превью и вашим подтверждением;
-- вести журнал всех решений.
+`blasthack-mcp.exe` is an MCP server that lets Claude help **blast.hk**
+moderators review the approval queue.
 
-Сервер работает от имени **вашего** аккаунта и с **вашими** правами модератора. У каждого модератора свои куки и свой журнал.
+Reviewing a release means opening every attachment, reading the code for
+stealers and checking the topic against the section rules. The server gives
+Claude the forum pages, the attached files and the rules, so Claude goes
+through the queue one item at a time and proposes a decision with reasons.
+Every action on the site is previewed first and sent only after the moderator
+confirms it; nothing from an attachment is ever executed.
 
-## Как Claude работает с сервером
+## Features
 
-Порядок работы встроен в инструкцию сервера (`REVIEW_GUIDE` в [server.py](server.py)), и Claude получает её в любой сессии, где подключён сервер:
-- **Заявки разбираются по одной.** По каждой Claude рассказывает:
-  - что выложено и куда уходят данные, с проверкой каждого домена;
-  - есть ли стиллер;
-  - подходят ли раздел и правила (с номером пункта) и нет ли дубликатов.
+- Reads sections, threads and posts; search tells deleted and unapproved
+  threads apart and shows who deleted a thread and why.
+- Scans attachments in memory for stealers, downloaders, autorun,
+  obfuscation, compiled Lua, packers and SQL injection; unpacks zip, 7z and
+  rar.
+- Shows any lines of an attachment or of a file inside its archive.
+- Approves and rejects queue items, edits posts and moves threads, each with
+  a dry-run preview.
+- Checks on the site that every action took effect and writes it to a
+  decision log in Documents.
+- Refuses a rejection reason longer than the site accepts and a move that
+  would hide an unapproved thread from you.
+- Acts as the account whose cookies it is given, with that account's rights.
 
-  В конце даёт вердикт.
-- **Ничего не уходит на сайт без превью.** Любое действие сначала выполняется с `dry_run`: Claude показывает точный текст, а отправляет только после вашего «да» на это превью.
-- **Журнал решений.** Каждое реальное действие записывается в `Документы\blasthack-moderation-log.txt`: кто, что, чей скрипт, ссылка, файлы, причина и заметка модератора с подробностями.
+## Requirements
 
-Начать можно так: «покажи очередь на blasthack и разбери первую заявку».
+- Windows 10 or later, 64-bit.
+- An MCP client, such as Claude Code or Claude Desktop.
+- A blast.hk moderator account.
 
-## Инструменты
+## Installation
 
-**Чтение**
+1. Extract `blasthack-mcp.exe` into a permanent folder.
+2. Sign in to blast.hk in a browser with "Remember me"; with two-factor
+   authentication also tick "Trust this device". Copy the `xf_user` and
+   `xf_tfa_trust` cookies from the browser developer tools (F12,
+   Application, Cookies).
+3. Register the server in Claude Code:
 
-| Инструмент | Что делает |
-|---|---|
-| `whoami` | Под каким аккаунтом работают куки, видна ли очередь |
-| `can_moderate_forum(forum_id)` | Есть ли у вас права модератора в разделе |
-| `list_forums` | Все разделы с id и подразделами |
-| `list_threads(forum_id, page, prefix_id)` | Темы раздела: автор, префикс, ответы, просмотры, статус |
-| `read_thread(thread_id, page, first_post_only)` | Тема с постами (код, цитаты и спойлеры сохраняются). Статус: опубликована / ждёт одобрения / удалена (кем, когда, почему) |
-| `read_post(post_id)` | Один пост целиком |
-| `search(query, forum_id, titles_only, author, order)` | Поиск. Скрытые темы помечены статусом, удалённая тема не считается дубликатом |
-| `forum_rules(section)` | Сводка правил blast.hk для модерации (из [RULES.md](RULES.md)) |
+   ```powershell
+   claude mcp add blasthack --scope user -e BLASTHACK_COOKIES="xf_user=...; xf_tfa_trust=..." -- "C:\Tools\blasthack-mcp.exe"
+   ```
 
-**Проверка файлов** (файлы скачиваются в память и никогда не запускаются)
+   or in the `mcpServers` section of `claude_desktop_config.json`:
 
-| Инструмент | Что делает |
-|---|---|
-| `list_attachments(thread_id / post_id)` | Вложения и внешние ссылки, с пометкой о запрещённых файлообменниках |
-| `analyze_attachment(attachment_id)` | Ищет признаки стиллеров (браузеры, Discord, Telegram, данные SA-MP, вебхуки), загрузчиков, автозапуска, обфускации, `.luac`, пакеров (VMProtect, UPX…) и SQL-инъекций. Архивы zip/7z/rar разбирает рекурсивно, у .asi/.dll/.exe смотрит импорты и секции |
-| `read_attachment(attachment_id, member, start_line)` | Текст файла (или файла из архива) с номерами строк |
+   ```json
+   "blasthack": {
+     "command": "C:\\Tools\\blasthack-mcp.exe",
+     "env": { "BLASTHACK_COOKIES": "xf_user=...; xf_tfa_trust=..." }
+   }
+   ```
 
-**Действия** (по умолчанию превью; каждое реальное действие проверяется на сайте и пишется в журнал)
+4. Start a new session and ask Claude to call `whoami`.
 
-| Инструмент | Что делает |
-|---|---|
-| `approval_queue_list` / `approval_queue_item` | Что ждёт одобрения и какие действия доступны |
-| `approval_queue_process(decisions, dry_run)` | Одобрить / отклонить (причина до 100 символов, уведомление, `note` для журнала) |
-| `edit_post(post_id, append_bbcode / replace_bbcode, dry_run)` | Дописать или заменить текст поста (название, префиксы и вложения сохраняются) |
-| `move_thread(thread_id, target_forum_id, dry_run)` | Перенести тему. Не даст перенести неодобренную тему в раздел, где у вас нет прав |
+The cookies give full access to the moderator account: never share them.
+Signing out on the site revokes them. `xf_tfa_trust` expires after a while;
+the server then reports that two-factor authentication is required, and the
+cookie has to be copied again.
 
-## Установка
+## Configuration
 
-Нужен Python 3.10+.
+Environment variables:
 
-```bash
-pip install -r requirements.txt
+| Variable | Default | Meaning |
+| --- | --- | --- |
+| `BLASTHACK_COOKIES` | | Cookie string: `xf_user=...; xf_tfa_trust=...` |
+| `BLASTHACK_XF_USER` | | The `xf_user` cookie alone, for accounts without two-factor authentication |
+| `BLASTHACK_READONLY` | `0` | `1` refuses every action on the site; reading and scanning still work |
+| `BLASTHACK_LOG` | `Documents\blasthack-moderation-log.txt` | Decision log file |
+| `BLASTHACK_MAX_ATTACHMENT_MB` | `100` | Largest attachment the server downloads |
+| `BLASTHACK_MAX_POST_CHARS` | `6000` | Post length shown in lists before it is cut |
+
+## Release Integrity
+
+Releases are built by GitHub Actions from the tagged commit and carry a
+SHA-256 file and a build-provenance attestation:
+
+```powershell
+gh attestation verify blasthack-mcp-v1.0.0.zip -R sonochiwa/blasthack-mcp
 ```
 
-Для RAR-архивов нужен установленный [7-Zip](https://www.7-zip.org/) (путь можно задать через `BLASTHACK_7Z`).
+## License
 
-Проверка анализатора: `python -I tests/test_analyzer.py`.
-
-## Авторизация (у каждого модератора своя)
-
-API-ключи XenForo выдаёт только админ, поэтому сервер ходит на сайт с куками вашего браузера.
-
-1. Войдите на blast.hk в браузере с галочкой «Запомнить меня». Если включена 2FA, при вводе кода отметьте «Доверять этому устройству».
-2. Откройте DevTools (F12) → Application → Cookies → `https://www.blast.hk`.
-3. Скопируйте значения `xf_user` и, если есть 2FA, `xf_tfa_trust`.
-
-**Эти куки — фактически пароль от вашего аккаунта модератора.** Не пересылайте их, не коммитьте и не кладите в общий конфиг. Если куки утекли, нажмите на сайте «Выход»: старые куки перестанут работать. Срок жизни `xf_tfa_trust` ограничен. Когда он истечёт, сервер напишет, что нужна 2FA, и куку нужно будет обновить.
-
-## Подключение
-
-**Claude Code** (для всех проектов):
-
-```bash
-claude mcp add blasthack --scope user -e BLASTHACK_COOKIES="xf_user=...; xf_tfa_trust=..." -- python "C:/путь/к/blasthack-mcp/server.py"
-```
-
-**Claude Desktop** — в `claude_desktop_config.json`:
-
-```json
-{
-  "mcpServers": {
-    "blasthack": {
-      "command": "python",
-      "args": ["C:/путь/к/blasthack-mcp/server.py"],
-      "env": { "BLASTHACK_COOKIES": "xf_user=...; xf_tfa_trust=..." }
-    }
-  }
-}
-```
-
-После подключения откройте новую сессию и попросите Claude вызвать `whoami`: он должен показать ваш ник и `approval_queue_link_visible: true`.
-
-## Переменные окружения
-
-| Переменная | Назначение |
-|---|---|
-| `BLASTHACK_COOKIES` | Строка cookie: `xf_user=...; xf_tfa_trust=...` (основной способ) |
-| `BLASTHACK_XF_USER` / `BLASTHACK_XF_SESSION` | Отдельные куки, если 2FA нет |
-| `BLASTHACK_READONLY=1` | Запретить любые изменения на сайте (только чтение и проверка) |
-| `BLASTHACK_LOG` | Путь к журналу решений (по умолчанию `Документы\blasthack-moderation-log.txt`) |
-| `BLASTHACK_7Z` | Путь к 7z.exe для RAR |
-| `BLASTHACK_MAX_ATTACHMENT_MB` | Максимальный размер скачиваемого вложения (по умолчанию 100) |
-| `BLASTHACK_MAX_POST_CHARS` | Обрезка длинных постов в списках (по умолчанию 6000) |
-| `BLASTHACK_USER_AGENT`, `BLASTHACK_BASE_URL` | На всякий случай |
-
-## Ограничения
-
-- Сервер разбирает HTML страниц сайта. Если blast.hk сменит шаблоны, часть полей может перестать читаться.
-- Анализатор не антивирус: он подсказывает, какие места кода прочитать. Вердикт выносится по прочитанному коду.
-- Правила в [RULES.md](RULES.md) — это сводка на 30.10.2026. Если правила форума изменятся, обновите сводку.
+MIT. See [LICENSE](LICENSE).

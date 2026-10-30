@@ -1,0 +1,111 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v[0-9]+.[0-9]+.[0-9]+"
+
+permissions:
+  contents: write
+  id-token: write
+  attestations: write
+
+jobs:
+  release:
+    runs-on: windows-2022
+
+    steps:
+      - name: Check out tagged source
+        uses: actions/checkout@v6
+
+      - name: Set up Go
+        uses: actions/setup-go@v7
+        with:
+          go-version-file: go.mod
+
+      - name: Check version
+        id: version
+        shell: pwsh
+        run: |
+          $version = "${{ github.ref_name }}" -replace '^v', ''
+          $escaped = [regex]::Escape($version)
+
+          $source = Get-Content cmd\blasthack-mcp\version.go -Raw
+          if ($source -notmatch ('const version = "' + $escaped + '"')) {
+              throw "cmd/blasthack-mcp/version.go does not define version $version."
+          }
+          if ((Get-Content CHANGELOG.md -Raw) -notmatch "(?m)^##[ \t]+$escaped[ \t]*\r?$") {
+              throw "CHANGELOG.md has no section for $version."
+          }
+          if (-not (Get-Content README.md -Raw).Contains("blasthack-mcp-v$version.zip")) {
+              throw "README.md Release Integrity example does not name version $version."
+          }
+          "version=$version" >> $env:GITHUB_OUTPUT
+
+      - name: Test
+        run: |
+          go vet ./...
+          go test ./...
+
+      - name: Build Windows x64
+        env:
+          GOOS: windows
+          GOARCH: amd64
+          CGO_ENABLED: "0"
+        run: go build -trimpath -ldflags "-s -w" -o build\blasthack-mcp.exe ./cmd/blasthack-mcp
+
+      - name: Package release
+        id: package
+        shell: pwsh
+        run: |
+          $version = "${{ steps.version.outputs.version }}"
+
+          $archiveName = "blasthack-mcp-v$version.zip"
+          $archive = Join-Path build $archiveName
+          $checksum = "$archive.sha256"
+          $stage = Join-Path build "release\blasthack-mcp-v$version"
+          Remove-Item -LiteralPath $stage -Recurse -Force -ErrorAction SilentlyContinue
+          New-Item -ItemType Directory -Path $stage -Force | Out-Null
+          Copy-Item build\blasthack-mcp.exe -Destination $stage
+          (Get-Content .github\release\README.txt -Raw).Replace('{version}', $version) |
+              Set-Content -LiteralPath (Join-Path $stage README.txt) -Encoding ascii -NoNewline
+
+          Compress-Archive -Path "$stage\*" -DestinationPath $archive -Force
+          $hash = (Get-FileHash -Algorithm SHA256 -LiteralPath $archive).Hash.ToLowerInvariant()
+          "$hash  $archiveName" | Set-Content -LiteralPath $checksum -Encoding ascii
+
+          $changelog = Get-Content CHANGELOG.md -Raw
+          # The optional suffix after the heading must stay on the heading
+          # line: under (?s) a \s+ there crosses the blank line and swallows the
+          # first bullet of the section.
+          $pattern = "(?ms)^##[ \t]+$([regex]::Escape($version))(?:[ \t]+-[^\r\n]+)?[ \t]*\r?\n(?<body>.*?)(?=^##[ \t]|\z)"
+          $match = [regex]::Match($changelog, $pattern)
+          if (-not $match.Success) {
+              throw "CHANGELOG.md has no section for $version."
+          }
+          [IO.File]::WriteAllText(
+              (Join-Path build release-notes.md),
+              $match.Groups['body'].Value.Trim(),
+              [Text.UTF8Encoding]::new($false)
+          )
+
+          "archive=$archive" >> $env:GITHUB_OUTPUT
+          "checksum=$checksum" >> $env:GITHUB_OUTPUT
+
+      - name: Attest release archive
+        uses: actions/attest@v4
+        with:
+          subject-path: ${{ steps.package.outputs.archive }}
+
+      - name: Publish GitHub release
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "${{ github.ref_name }}" `
+            "${{ steps.package.outputs.archive }}" `
+            "${{ steps.package.outputs.checksum }}" `
+            --verify-tag `
+            --latest `
+            --title "BlastHack MCP v${{ steps.version.outputs.version }}" `
+            --notes-file build\release-notes.md
