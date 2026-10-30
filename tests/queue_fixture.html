@@ -1,0 +1,22 @@
+<html data-csrf="TOKEN123" data-logged-in="true" data-template="approval_queue"><body>
+<form action="/approval-queue/process" method="post" class="block">
+<div class="block-container"><div class="block-body">
+ <div class="message message--simple"><div class="message-inner"><div class="message-cell message-cell--main">
+  <header class="message-attribution"><a href="/threads/555/">Новый скрипт для MoonLoader</a> <a class="username" href="/members/7/">newbie</a> <time datetime="2026-10-30T10:00:00+0300"></time></header>
+  <div class="message-body"><div class="bbWrapper">Привет, вот <b>скрипт</b><div class="bbCodeBlock bbCodeBlock--code" data-lang="lua"><code>print("hi")</code></div></div></div>
+  <div class="message-footer"><dl class="formRow"><dd><ul class="inputChoices">
+   <li><label><input type="radio" name="queue[post][901]" value="" checked><span>Ничего не делать</span></label></li>
+   <li><label><input type="radio" name="queue[post][901]" value="approve"><span>Одобрить</span></label></li>
+   <li><label><input type="radio" name="queue[post][901]" value="delete"><span>Удалить</span></label>
+     <ul><li><input type="text" name="reason[post][901]"></li><li><label><input type="checkbox" name="notify[post][901]" value="1" checked>Уведомить</label></li></ul></li>
+  </ul></dd></dl></div>
+ </div></div></div>
+ <div class="message message--simple"><div class="message-inner"><div class="message-cell">
+  <h3><a href="/members/8/">spammer</a></h3><p>Email: x@y.z  IP: 1.2.3.4</p>
+  <dl class="formRow"><dd><ul class="inputChoices">
+   <li><label><input type="radio" name="queue[user][8]" value="" checked><span>Ничего</span></label></li>
+   <li><label><input type="radio" name="queue[user][8]" value="approve"><span>Одобрить</span></label></li>
+   <li><label><input type="radio" name="queue[user][8]" value="reject"><span>Отклонить</span></label><ul><li><input type="text" name="reason[user][8]"></li></ul></li>
+  </ul></dd></dl>
+ </div></div></div>
+</div></div></form></body></html>

@@ -1,0 +1,12 @@
+*.log
+.vs/
+*.user
+.agents/
+.claude/
+.codex/
+
+__pycache__/
+*.pyc
+.env
+blasthack-moderation-log.txt
+tests/_*.html
