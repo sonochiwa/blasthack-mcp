@@ -116,7 +116,26 @@ type moveArgs struct {
 	DryRun        *bool  `json:"dry_run,omitempty" jsonschema:"show the result without sending (default true)"`
 }
 
-func registerTools(s *mcp.Server, c *forum.Client) {
+// registerGuide offers the review instructions as a tool and as a prompt. Claude Code shows server
+// instructions to the model; other clients may not, but every client passes tools to the model.
+func registerGuide(s *mcp.Server, guide string) {
+	mcp.AddTool(s, &mcp.Tool{Name: "moderation_guide", Annotations: &mcp.ToolAnnotations{ReadOnlyHint: true},
+		Description: "How to review the blast.hk approval queue with these tools: the workflow, what to check in " +
+			"every release and the confirmation rules for actions on the site. Read it before reviewing if the " +
+			"server instructions were not shown to you."},
+		func(context.Context, *mcp.CallToolRequest, none) (*mcp.CallToolResult, any, error) {
+			return &mcp.CallToolResult{Content: []mcp.Content{&mcp.TextContent{Text: guide}}}, nil, nil
+		})
+	s.AddPrompt(&mcp.Prompt{Name: "review_queue", Title: "Разобрать очередь на одобрение",
+		Description: "Start reviewing the blast.hk approval queue with the moderation guide."},
+		func(context.Context, *mcp.GetPromptRequest) (*mcp.GetPromptResult, error) {
+			return &mcp.GetPromptResult{Messages: []*mcp.PromptMessage{{Role: "user",
+				Content: &mcp.TextContent{Text: guide + "\nПокажи очередь на одобрение и разбери первую заявку."}}}}, nil
+		})
+}
+
+func registerTools(s *mcp.Server, c *forum.Client, guide string) {
+	registerGuide(s, guide)
 	add(s, "whoami", "Show which blast.hk account the cookies log in as (and whether they work).", readOnly,
 		func(ctx context.Context, _ none) (any, error) { return c.Whoami(ctx) })
 	add(s, "can_moderate_forum", "Whether the account has moderator rights (inline moderation) in a forum section.", readOnly,
@@ -168,7 +187,7 @@ func registerTools(s *mcp.Server, c *forum.Client) {
 			return &mcp.CallToolResult{Content: []mcp.Content{&mcp.TextContent{Text: rules.Section(a.Section)}}}, nil, nil
 		})
 	add(s, "approval_queue_list", "List items waiting in the approval queue: content type and id, author, section, "+
-		"text and the actions the site offers for each item.", readOnly,
+		"text and the actions the site offers for each item. Review them as moderation_guide describes.", readOnly,
 		func(ctx context.Context, a queueListArgs) (any, error) {
 			return c.QueueList(ctx, a.ContentType, a.FullText)
 		})

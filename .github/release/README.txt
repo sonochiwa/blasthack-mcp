@@ -1,8 +1,9 @@
 BlastHack MCP v{version}
 https://github.com/sonochiwa/blasthack-mcp
 
-MCP server that lets Claude help blast.hk moderators review the approval
-queue. Windows 10 or later, 64-bit.
+MCP server that lets an AI assistant (Claude, Codex or another MCP client)
+help blast.hk moderators review the approval queue. Windows 10 or later,
+64-bit.
 
 Installation
   Extract blasthack-mcp.exe into a permanent folder, then register it in
